@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ichinese-open-sdk"
+dynamic = ["version"]
+description = "Server SDK for the iChinese open platform (open API, tokens, web login, events)"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.9"
+dependencies = []
+keywords = ["ichinese", "open platform", "openapi", "sdk"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Operating System :: OS Independent",
+  "Typing :: Typed",
+  "Intended Audience :: Developers",
+]
+
+[project.urls]
+Homepage = "https://github.com/ichinese-cn/open-sdk-python"
+Documentation = "https://open.ichinese.cn"
+Issues = "https://github.com/ichinese-cn/open-sdk-python/issues"
+
+[project.optional-dependencies]
+crypto = ["cryptography>=41"]
+
+[tool.hatch.version]
+path = "src/ichinese_open/_meta.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ichinese_open"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/ichinese_open", "tests", "examples", "README.md", "LICENSE"]
