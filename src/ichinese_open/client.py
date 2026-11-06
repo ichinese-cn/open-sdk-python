@@ -14,6 +14,7 @@ exchanging the web login's codes::
 from __future__ import annotations
 
 import json
+import os
 import random
 import socket
 import threading
@@ -21,7 +22,8 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any, Dict, Iterator, Mapping, Optional, Sequence, Tuple, cast
+import uuid
+from typing import Any, BinaryIO, Dict, Iterator, Mapping, Optional, Sequence, Tuple, Union, cast
 
 from ._meta import API_PREFIX, DEFAULT_BASE_URL, VERSION
 from ._operations import Operations
@@ -163,6 +165,195 @@ class Client(Operations):
         with self._lock:
             self._tokens.clear()
 
+    # ── posting in a person's name (D105), and as the institution (M6.21 K2) ──
+
+    def upload_image(self, user_access_token: str, data: bytes, content_type: str) -> str:
+        """Uploads an image for a post: asks for an upload slot, PUTs the bytes there and returns the
+        ``key`` to put in ``images[].key``. Up to 10 MB; ``image/jpeg``, ``image/png``, ``image/webp`` or
+        ``image/gif``."""
+        return self._upload_image({"user_access_token": user_access_token}, data, content_type)
+
+    def upload_image_as_org(self, tenant_key: str, data: bytes, content_type: str) -> str:
+        """``upload_image`` for a post of the institution (its tenant token; it granted ``community:post``)."""
+        return self._upload_image({"tenant_key": tenant_key}, data, content_type)
+
+    def upload_video(
+        self,
+        user_access_token: str,
+        data: Union[bytes, str, "os.PathLike[str]", BinaryIO],
+        filename: str,
+        content_type: str,
+    ) -> Dict[str, Any]:
+        """Uploads a video for a post (up to 4 GB, 1 hour): asks for an upload slot, PUTs the file there
+        and starts transcoding. ``data`` is the bytes, a file path or a file opened in binary mode (a
+        path or a file is streamed, not read into memory; with your own ``transport`` the body is then
+        that file object). Returns the video's status (``asset_id``); wait for ``ready`` with
+        ``wait_video_ready`` before posting."""
+        return self._upload_video({"user_access_token": user_access_token}, data, filename, content_type)
+
+    def upload_video_as_org(
+        self,
+        tenant_key: str,
+        data: Union[bytes, str, "os.PathLike[str]", BinaryIO],
+        filename: str,
+        content_type: str,
+    ) -> Dict[str, Any]:
+        """``upload_video`` for a post of the institution."""
+        return self._upload_video({"tenant_key": tenant_key}, data, filename, content_type)
+
+    def wait_video_ready(
+        self,
+        user_access_token: str,
+        asset_id: str,
+        *,
+        timeout: float = 30 * 60,
+        interval: float = 2.0,
+        max_interval: float = 15.0,
+    ) -> Dict[str, Any]:
+        """Waits until a video has been transcoded and returns it (``status == "ready"``), looking every
+        ``interval`` seconds, doubling up to ``max_interval``. A failed transcode raises ``OpenApiError``
+        with reason ``video_failed`` (upload another file); after ``timeout`` seconds (default 30 minutes)
+        it raises one with code ``TIMEOUT`` (reason ``video_not_ready``). You also get the
+        ``community.video_ready`` event."""
+        return self._wait_video({"user_access_token": user_access_token}, asset_id, timeout, interval, max_interval)
+
+    def wait_video_ready_as_org(
+        self,
+        tenant_key: str,
+        asset_id: str,
+        *,
+        timeout: float = 30 * 60,
+        interval: float = 2.0,
+        max_interval: float = 15.0,
+    ) -> Dict[str, Any]:
+        """``wait_video_ready`` for a video uploaded for the institution."""
+        return self._wait_video({"tenant_key": tenant_key}, asset_id, timeout, interval, max_interval)
+
+    def create_post(self, user_access_token: str, post: Dict[str, Any]) -> Dict[str, Any]:
+        """Posts in the person's name. Without a ``uuid`` the SDK makes one, so its own retries never post
+        twice; give your own ``uuid`` to make your retries safe too (one post per ``uuid`` within an hour).
+        Errors keep the server's reason: ``consent_required`` (send the person to ``e.consent_url``),
+        ``video_not_ready``, ``video_failed``, ``post_rate_limited``, ``app_user_daily_limit``,
+        ``daily_quota_exceeded``, ``minor_not_allowed``, ``app_post_stopped``, …"""
+        return self._create_post({"user_access_token": user_access_token}, post)
+
+    def create_post_as_org(self, tenant_key: str, post: Dict[str, Any]) -> Dict[str, Any]:
+        """Posts as the institution, with its community account (its name and logo; the post says it came
+        from this app). The institution must have installed the app and granted ``community:post``; before
+        its homepage was first published there is no account yet (409 ``no_org_account``). The same
+        limits, review and ``uuid`` handling as ``create_post``."""
+        return self._create_post({"tenant_key": tenant_key}, post)
+
+    # ── the institution's dashboard (M6.21 K2) ──────────────────────────────
+
+    def get_all_insights(self, tenant_key: str, query: Optional[Dict[str, Any]] = None) -> Dict[str, Dict[str, Any]]:
+        """Every page of the institution's dashboard the API offers (``GET /insights``,
+        ``insights:readonly``): the default page first, then each other tab it lists in ``tabs``, with the
+        same query (range, from/to, compare, venue_id, course_id, currency; a ``tab`` in it is ignored).
+        Returns tab → page. Fewer than five people come back as ``None`` with ``withheld: True``; money is
+        per currency, never converted."""
+        base = {k: v for k, v in (query or {}).items() if k != "tab"}
+        first = cast(Dict[str, Any], self.get_insights(base, tenant_key=tenant_key))
+        out: Dict[str, Dict[str, Any]] = {str(first.get("tab")): first}
+        for tab in first.get("tabs") or []:
+            if tab in out:
+                continue
+            out[tab] = cast(Dict[str, Any], self.get_insights(dict(base, tab=tab), tenant_key=tenant_key))
+        return out
+
+    def _upload_image(self, who: Dict[str, Any], data: bytes, content_type: str) -> str:
+        slot = self.create_community_image_upload({"content_type": content_type, "size_bytes": len(data)}, **who)
+        self._put_upload(slot["upload_url"], slot.get("headers") or {}, data, len(data))
+        return cast(str, slot["key"])
+
+    def _upload_video(
+        self,
+        who: Dict[str, Any],
+        data: Union[bytes, str, "os.PathLike[str]", BinaryIO],
+        filename: str,
+        content_type: str,
+    ) -> Dict[str, Any]:
+        if isinstance(data, (str, os.PathLike)):
+            with open(data, "rb") as f:
+                return self._upload_video(who, f, filename, content_type)
+        size = len(data) if isinstance(data, (bytes, bytearray)) else _file_size(data)
+        slot = self.create_community_video_upload(
+            {"filename": filename, "content_type": content_type, "size_bytes": size}, **who
+        )
+        upload = slot["upload"]
+        self._put_upload(upload["url"], upload.get("headers") or {}, data, size)
+        asset_id = urllib.parse.quote(str(slot["asset_id"]), safe="")
+        # Calling it again has no effect, so it is retried like a GET.
+        return cast(
+            Dict[str, Any],
+            self._send(
+                "POST",
+                f"/community/videos/{asset_id}/complete",
+                auth=("completeCommunityVideoUpload", ("user", "tenant"), who),
+                idempotent_post=True,
+            ),
+        )
+
+    def _wait_video(
+        self, who: Dict[str, Any], asset_id: str, timeout: float, interval: float, max_interval: float
+    ) -> Dict[str, Any]:
+        deadline = time.monotonic() + timeout
+        while True:
+            video = self.get_community_video(asset_id, **who)
+            status = video.get("status")
+            if status == "ready":
+                return cast(Dict[str, Any], video)
+            if status == "failed":
+                error = video.get("error")
+                raise OpenApiError(
+                    409,
+                    "CONFLICT",
+                    f"video {asset_id} could not be transcoded" + (f" ({error})" if error else ""),
+                    details={"reason": "video_failed", "asset_id": asset_id, "error": error},
+                )
+            left = deadline - time.monotonic()
+            if left <= 0:
+                raise OpenApiError(
+                    0,
+                    "TIMEOUT",
+                    f"video {asset_id} is not ready yet ({status})",
+                    details={"reason": "video_not_ready", "asset_id": asset_id, "status": status},
+                )
+            time.sleep(min(interval, left))
+            interval = min(interval * 2, max_interval)
+
+    def _create_post(self, who: Dict[str, Any], post: Dict[str, Any]) -> Dict[str, Any]:
+        body = post if post.get("uuid") else dict(post, uuid=str(uuid.uuid4()))
+        return cast(
+            Dict[str, Any],
+            self._send(
+                "POST",
+                "/community/posts",
+                body=body,
+                auth=("createCommunityPost", ("user", "tenant"), who),
+                idempotent_post=True,
+            ),
+        )
+
+    def _put_upload(self, url: str, headers: Mapping[str, str], data: Any, size: int) -> None:
+        """PUTs an upload to the slot the platform gave (object storage, not the open API: no token, its
+        own headers)."""
+        h = dict(headers)
+        if not any(k.lower() == "content-length" for k in h):
+            h["Content-Length"] = str(size)
+        try:
+            status, _, raw = self._transport("PUT", url, h, data, self.timeout)
+        except (TimeoutError, socket.timeout, OSError) as e:
+            timed_out = isinstance(e, (TimeoutError, socket.timeout))
+            raise OpenApiError(0, "TIMEOUT" if timed_out else "NETWORK", f"PUT upload: {e}") from e
+        if not 200 <= status < 300:
+            raise OpenApiError(
+                status,
+                "UPLOAD_FAILED",
+                f"PUT upload: HTTP {status}",
+                details={"reason": "upload_failed", "body": raw[:500].decode("utf-8", "replace")},
+            )
+
     # ── calls ────────────────────────────────────────────────────────────────
 
     def request(
@@ -302,14 +493,16 @@ class Client(Operations):
         body: Any = None,
         auth: Optional[Tuple[str, Tuple[str, ...], Dict[str, Any]]] = None,
         retry_post: bool = True,
+        idempotent_post: bool = False,
     ) -> Any:
         options = auth[2] if auth else {}
         refreshed = False
         attempt = 0
         url = self._url(path, query)
         data = None if body is None else json.dumps(body, ensure_ascii=False).encode("utf-8")
-        # Token requests are safe to repeat; exchanging a one-time code is not.
-        idempotent = method in IDEMPOTENT or (method == "POST" and retry_post and auth is None)
+        # Token requests are safe to repeat; exchanging a one-time code is not. ``idempotent_post`` also
+        # retries a POST with a token that the server makes idempotent (a post with its uuid, completing an upload).
+        idempotent = method in IDEMPOTENT or (method == "POST" and (idempotent_post or (retry_post and auth is None)))
         while True:
             headers: Dict[str, str] = {"Accept": "application/json", "User-Agent": self.user_agent}
             headers.update(options.get("headers") or {})
@@ -353,6 +546,14 @@ class Client(Operations):
                 refreshed = True
                 continue
             raise error
+
+
+def _file_size(f: BinaryIO) -> int:
+    """What is left to read of a file opened in binary mode."""
+    pos = f.tell()
+    end = f.seek(0, os.SEEK_END)
+    f.seek(pos)
+    return end - pos
 
 
 def _number(v: Optional[str]) -> Optional[float]:

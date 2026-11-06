@@ -52,6 +52,13 @@ class OpenApiError(Exception):
         return self.details.get("never_ask") is True
 
     @property
+    def consent_url(self) -> Optional[str]:
+        """Where the person agrees to show their name on posts (409 ``consent_required``): send them there,
+        an app cannot agree for them."""
+        u = self.details.get("consent_url")
+        return u if isinstance(u, str) else None
+
+    @property
     def is_scope_error(self) -> bool:
         """A refused, not yet asked or undeclared scope (403): degrade gracefully."""
         return self.status == 403 and self.reason in SCOPE_REASONS

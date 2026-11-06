@@ -11,7 +11,9 @@ Reply = Tuple[int, Dict[str, str], Any]
 
 
 class Recorded:
-    def __init__(self, method: str, path: str, query: Dict[str, List[str]], headers: Dict[str, str], body: Any):
+    def __init__(self, method: str, path: str, query: Dict[str, List[str]], headers: Dict[str, str], body: Any,
+                 raw: bytes = b""):
+        self.raw = raw
         self.method = method
         self.path = path
         self.query = query
@@ -36,8 +38,11 @@ class MockServer:
                 u = urlsplit(self.path)
                 n = int(self.headers.get("Content-Length") or 0)
                 raw = self.rfile.read(n) if n else b""
-                body = json.loads(raw) if raw else None
-                rec = Recorded(self.command, u.path, parse_qs(u.query), {k.lower(): v for k, v in self.headers.items()}, body)
+                try:
+                    body = json.loads(raw) if raw else None
+                except ValueError:  # an upload's bytes
+                    body = None
+                rec = Recorded(self.command, u.path, parse_qs(u.query), {k.lower(): v for k, v in self.headers.items()}, body, raw)
                 with outer.lock:
                     outer.requests.append(rec)
                 route = outer.routes.get((self.command, u.path))

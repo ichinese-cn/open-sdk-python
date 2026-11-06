@@ -102,6 +102,20 @@ class Operations:
         """Every item of ``list_class_sessions``, page after page (``page_size`` defaults to 100)."""
         return self._iterate("listClassSessions", "GET", "/classes/{class_id}/sessions", {"class_id": class_id}, query, ("tenant", "user"), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
 
+    def create_class_sessions(self, class_id: str, body: Dict[str, Any], *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """Schedule a class's sessions (once, or repeating weekly), online or at one of the institution's teaching sites
+
+        ``POST /classes/{class_id}/sessions; tenant / user token; scopes: schedule``
+        """
+        return self._call("createClassSessions", "POST", "/classes/{class_id}/sessions", {"class_id": class_id}, None, body, ("tenant", "user"), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def set_class_session_place(self, class_id: str, session_id: str, body: Dict[str, Any], *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """Change where one session (or this one and the later ones of its series) is held
+
+        ``PUT /classes/{class_id}/sessions/{session_id}/place; tenant / user token; scopes: schedule``
+        """
+        return self._call("setClassSessionPlace", "PUT", "/classes/{class_id}/sessions/{session_id}/place", {"class_id": class_id, "session_id": session_id}, None, body, ("tenant", "user"), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
     def cancel_class_session(self, class_id: str, session_id: str, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
         """Cancel a class session (members are notified, the same as cancelling in the timetable)
 
@@ -319,7 +333,7 @@ class Operations:
         return self._iterate("listTrialVenues", "GET", "/trial/venues", {}, query, ("tenant",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
 
     def list_trial_slots(self, query: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
-        """Trial lesson slots (by default only those not over yet, by time)
+        """Trial times (a trial lesson's own times at teaching sites; by default only those not over yet, by time)
 
         ``GET /trial/slots; tenant token; scopes: trial``
         """
@@ -330,18 +344,25 @@ class Operations:
         return self._iterate("listTrialSlots", "GET", "/trial/slots", {}, query, ("tenant",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
 
     def create_trial_slots(self, body: Dict[str, Any], *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
-        """Schedule trial lesson slots (they can repeat weekly); the teaching site must be published
+        """Open trial times (they can repeat weekly): add them to an existing trial lesson, or open a new trial draft
 
         ``POST /trial/slots; tenant token; scopes: trial``
         """
         return self._call("createTrialSlots", "POST", "/trial/slots", {}, None, body, ("tenant",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
 
     def cancel_trial_slot(self, slot_id: str, body: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
-        """Cancel a trial lesson slot (whoever booked it is notified as usual; the booking is cancelled with it)
+        """Close a trial time (no more bookings; bookings already made stay as they are, and nobody is notified)
 
         ``POST /trial/slots/{slot_id}/cancel; tenant token; scopes: trial``
         """
         return self._call("cancelTrialSlot", "POST", "/trial/slots/{slot_id}/cancel", {"slot_id": slot_id}, None, body, ("tenant",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def set_trial_teacher(self, opening_id: str, body: Dict[str, Any], *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """Fill in (or change) the teacher of a trial draft
+
+        ``PUT /trial/openings/{opening_id}/teacher; tenant token; scopes: trial``
+        """
+        return self._call("setTrialTeacher", "PUT", "/trial/openings/{opening_id}/teacher", {"opening_id": opening_id}, None, body, ("tenant",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
 
     def list_trial_bookings(self, query: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
         """Trial lesson bookings at the institution's teaching sites
@@ -361,6 +382,56 @@ class Operations:
         """
         return self._call("confirmTrialBooking", "POST", "/trial/bookings/{booking_id}/confirm", {"booking_id": booking_id}, None, None, ("tenant",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
 
+    def list_venues(self, query: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """The institution's teaching sites (campuses), newest first
+
+        ``GET /venues; tenant token; scopes: venue:readonly, venue, trial``
+        """
+        return self._call("listVenues", "GET", "/venues", {}, query, None, ("tenant",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def iter_list_venues(self, query: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Iterator[Dict[str, Any]]:
+        """Every item of ``list_venues``, page after page (``page_size`` defaults to 100)."""
+        return self._iterate("listVenues", "GET", "/venues", {}, query, ("tenant",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def create_venue(self, body: Dict[str, Any], *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """Create a draft teaching site (campus); it is published in the platform and reviewed as usual
+
+        ``POST /venues; tenant token; scopes: venue``
+        """
+        return self._call("createVenue", "POST", "/venues", {}, None, body, ("tenant",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def get_venue(self, venue_id: str, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """One teaching site (of this institution only)
+
+        ``GET /venues/{venue_id}; tenant token; scopes: venue:readonly, venue, trial``
+        """
+        return self._call("getVenue", "GET", "/venues/{venue_id}", {"venue_id": venue_id}, None, None, ("tenant",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def list_openings(self, query: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """Openings: every class and course opened (group classes, one-to-ones, open classes, trial lessons, video courses), newest first
+
+        ``GET /openings; tenant / user token; scopes: opening:readonly``
+        """
+        return self._call("listOpenings", "GET", "/openings", {}, query, None, ("tenant", "user"), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def iter_list_openings(self, query: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Iterator[Dict[str, Any]]:
+        """Every item of ``list_openings``, page after page (``page_size`` defaults to 100)."""
+        return self._iterate("listOpenings", "GET", "/openings", {}, query, ("tenant", "user"), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def get_opening(self, opening_id: str, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """One opening
+
+        ``GET /openings/{opening_id}; tenant / user token; scopes: opening:readonly``
+        """
+        return self._call("getOpening", "GET", "/openings/{opening_id}", {"opening_id": opening_id}, None, None, ("tenant", "user"), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def get_insights(self, query: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """One page of the institution's dashboard (read only): enrolment, teaching, teaching sites, income, community and events
+
+        ``GET /insights; tenant token; scopes: insights:readonly``
+        """
+        return self._call("getInsights", "GET", "/insights", {}, query, None, ("tenant",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
     def list_trade_orders(self, query: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
         """The institution's orders (read-only, for reconciliation). Write operations involving money are not open
 
@@ -371,6 +442,24 @@ class Operations:
     def iter_list_trade_orders(self, query: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Iterator[Dict[str, Any]]:
         """Every item of ``list_trade_orders``, page after page (``page_size`` defaults to 100)."""
         return self._iterate("listTradeOrders", "GET", "/trade/orders", {}, query, ("tenant",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def list_bookings(self, query: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """The institution's bookings (one-to-ones and trial lessons, read only for reconciliation), latest lesson first
+
+        ``GET /bookings; tenant token; scopes: trade:booking:readonly``
+        """
+        return self._call("listBookings", "GET", "/bookings", {}, query, None, ("tenant",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def iter_list_bookings(self, query: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Iterator[Dict[str, Any]]:
+        """Every item of ``list_bookings``, page after page (``page_size`` defaults to 100)."""
+        return self._iterate("listBookings", "GET", "/bookings", {}, query, ("tenant",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def get_booking(self, booking_id: str, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """One booked lesson
+
+        ``GET /bookings/{booking_id}; tenant token; scopes: trade:booking:readonly``
+        """
+        return self._call("getBooking", "GET", "/bookings/{booking_id}", {"booking_id": booking_id}, None, None, ("tenant",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
 
     def list_tenant_reviews(self, query: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
         """Reviews of this institution (and its courses and teaching sites)
@@ -428,3 +517,132 @@ class Operations:
         ``POST /reports; user token; scopes: report:create``
         """
         return self._call("reportOnBehalf", "POST", "/reports", {}, None, body, ("user",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def create_community_image_upload(self, body: Dict[str, Any], *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """Get an upload URL for an image (it is re-encoded and its EXIF removed when the post is made)
+
+        ``POST /community/images; user / tenant token; scopes: community:post``
+        """
+        return self._call("createCommunityImageUpload", "POST", "/community/images", {}, None, body, ("user", "tenant"), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def create_community_video_upload(self, body: Dict[str, Any], *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """Get an upload URL for a video (up to 4 GB, 1 hour)
+
+        ``POST /community/videos; user / tenant token; scopes: community:post``
+        """
+        return self._call("createCommunityVideoUpload", "POST", "/community/videos", {}, None, body, ("user", "tenant"), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def complete_community_video_upload(self, asset_id: str, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """The upload is done; start transcoding (calling it again has no side effects)
+
+        ``POST /community/videos/{asset_id}/complete; user / tenant token; scopes: community:post``
+        """
+        return self._call("completeCommunityVideoUpload", "POST", "/community/videos/{asset_id}/complete", {"asset_id": asset_id}, None, None, ("user", "tenant"), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def get_community_video(self, asset_id: str, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """Transcoding status (only for videos this app uploaded for this person)
+
+        ``GET /community/videos/{asset_id}; user / tenant token; scopes: community:post``
+        """
+        return self._call("getCommunityVideo", "GET", "/community/videos/{asset_id}", {"asset_id": asset_id}, None, None, ("user", "tenant"), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def list_community_posts(self, query: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """Posts this app made in this person's name (the person's own posts and other apps' posts are not visible)
+
+        ``GET /community/posts; user / tenant token; scopes: community:post``
+        """
+        return self._call("listCommunityPosts", "GET", "/community/posts", {}, query, None, ("user", "tenant"), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def iter_list_community_posts(self, query: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Iterator[Dict[str, Any]]:
+        """Every item of ``list_community_posts``, page after page (``page_size`` defaults to 100)."""
+        return self._iterate("listCommunityPosts", "GET", "/community/posts", {}, query, ("user", "tenant"), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def create_community_post(self, body: Dict[str, Any], *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """Publish a public post in this person's name (text, up to 9 images or 1 video, up to 10 topics)
+
+        ``POST /community/posts; user / tenant token; scopes: community:post``
+        """
+        return self._call("createCommunityPost", "POST", "/community/posts", {}, None, body, ("user", "tenant"), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def get_community_post(self, post_id: str, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """The status of one post (only posts this app made; anything else is 404)
+
+        ``GET /community/posts/{post_id}; user / tenant token; scopes: community:post``
+        """
+        return self._call("getCommunityPost", "GET", "/community/posts/{post_id}", {"post_id": post_id}, None, None, ("user", "tenant"), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def delete_community_post(self, post_id: str, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """Delete a post (only posts this app made; anything else is 404)
+
+        ``DELETE /community/posts/{post_id}; user / tenant token; scopes: community:post``
+        """
+        return self._call("deleteCommunityPost", "DELETE", "/community/posts/{post_id}", {"post_id": post_id}, None, None, ("user", "tenant"), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def list_community_categories(self, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """Categories a post can be filed under (those enabled in this region)
+
+        ``GET /community/categories; user / tenant token; scopes: community:post``
+        """
+        return self._call("listCommunityCategories", "GET", "/community/categories", {}, None, None, ("user", "tenant"), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def get_my_schedule(self, query: Dict[str, Any], *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """This person's timetable: their sessions, the events they signed up for, confirmed trial lessons and exams (for calendar apps; read-only)
+
+        ``GET /me/schedule; user token; scopes: me:schedule:readonly``
+        """
+        return self._call("getMySchedule", "GET", "/me/schedule", {}, query, None, ("user",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def iter_get_my_schedule(self, query: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Iterator[Dict[str, Any]]:
+        """Every item of ``get_my_schedule``, page after page (``page_size`` defaults to 100)."""
+        return self._iterate("getMySchedule", "GET", "/me/schedule", {}, query, ("user",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def list_my_courses(self, query: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """The courses this person is studying and their progress (lessons completed, last studied; level and goals belong to the gold-only profile and are not here)
+
+        ``GET /me/courses; user token; scopes: me:learning:readonly``
+        """
+        return self._call("listMyCourses", "GET", "/me/courses", {}, query, None, ("user",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def iter_list_my_courses(self, query: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Iterator[Dict[str, Any]]:
+        """Every item of ``list_my_courses``, page after page (``page_size`` defaults to 100)."""
+        return self._iterate("listMyCourses", "GET", "/me/courses", {}, query, ("user",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def list_my_words(self, query: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """This person's word bank: words, pinyin, review state (no meanings, and review records cannot be changed)
+
+        ``GET /me/words; user token; scopes: me:words:readonly, me:words``
+        """
+        return self._call("listMyWords", "GET", "/me/words", {}, query, None, ("user",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def iter_list_my_words(self, query: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Iterator[Dict[str, Any]]:
+        """Every item of ``list_my_words``, page after page (``page_size`` defaults to 100)."""
+        return self._iterate("listMyWords", "GET", "/me/words", {}, query, ("user",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def add_my_word(self, body: Dict[str, Any], *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """Add a word to this person's word bank (unchanged if it is already there; its source is recorded as this app)
+
+        ``POST /me/words; user token; scopes: me:words``
+        """
+        return self._call("addMyWord", "POST", "/me/words", {}, None, body, ("user",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def list_class_exams(self, class_id: str, query: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """A class's exams (tenant tokens only, own institution)
+
+        ``GET /classes/{class_id}/exams; tenant token; scopes: grade:readonly``
+        """
+        return self._call("listClassExams", "GET", "/classes/{class_id}/exams", {"class_id": class_id}, query, None, ("tenant",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def iter_list_class_exams(self, class_id: str, query: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Iterator[Dict[str, Any]]:
+        """Every item of ``list_class_exams``, page after page (``page_size`` defaults to 100)."""
+        return self._iterate("listClassExams", "GET", "/classes/{class_id}/exams", {"class_id": class_id}, query, ("tenant",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def list_class_exam_results(self, class_id: str, exam_id: str, query: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """Each learner's result in one exam (scores only once released; tenant tokens only, own institution)
+
+        ``GET /classes/{class_id}/exams/{exam_id}/results; tenant token; scopes: grade:readonly``
+        """
+        return self._call("listClassExamResults", "GET", "/classes/{class_id}/exams/{exam_id}/results", {"class_id": class_id, "exam_id": exam_id}, query, None, ("tenant",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def iter_list_class_exam_results(self, class_id: str, exam_id: str, query: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Iterator[Dict[str, Any]]:
+        """Every item of ``list_class_exam_results``, page after page (``page_size`` defaults to 100)."""
+        return self._iterate("listClassExamResults", "GET", "/classes/{class_id}/exams/{exam_id}/results", {"class_id": class_id, "exam_id": exam_id}, query, ("tenant",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)

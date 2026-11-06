@@ -1,6 +1,6 @@
 # ichinese-open-sdk (Python)
 
-> **Prerelease 1.0.0-rc.2.** 这是预发布版，开放平台还没有正式开放，SDK 的默认地址可能连不上。This is a prerelease: the open platform is not open to the public yet, so the SDK's default address may not answer.
+> **Prerelease 1.0.0-rc.3.** 这是预发布版，开放平台还没有正式开放，SDK 的默认地址可能连不上。This is a prerelease: the open platform is not open to the public yet, so the SDK's default address may not answer.
 
 开放平台的 Python 服务端 SDK：开放接口（`/open-apis/v1`）的每个接口都是一个方法（由契约生成），另外帮你取应用令牌和机构令牌并在过期前续期、限流和服务端错误时退避重试、翻页、给出带类型的错误、在后端换网页免登码，以及事件推送的验签和解密。只用标准库，没有必需依赖。
 
@@ -86,6 +86,63 @@ else:
 `sign(...)` and `parse_card_action(...)` are there too. The signature is
 `v1=hex(HMAC-SHA256(secret, timestamp + "." + nonce + "." + body))`; encrypted bodies are AES-256-GCM
 with the key `SHA-256(encrypt key)`.
+
+### Posting in a person's name
+
+With a user token that has the `community:post` scope, four methods do the uploads and the waiting:
+
+| method | |
+|---|---|
+| `upload_image(user_token, data, content_type)` | gets an upload slot, PUTs the image there, returns its `key` |
+| `upload_video(user_token, data, filename, content_type)` | gets a slot, PUTs the video (bytes, a path or a binary file, streamed), starts transcoding; returns the video (`asset_id`) |
+| `wait_video_ready(user_token, asset_id, timeout=1800, interval=2)` | polls until the video is `ready`; raises `OpenApiError` with reason `video_failed`, or code `TIMEOUT` |
+| `create_post(user_token, post)` | posts; adds a `uuid` when you give none, so retries never post twice |
+
+```python
+try:
+    # A post with an image…
+    with open("photo.jpg", "rb") as f:
+        key = client.upload_image(user_token, f.read(), "image/jpeg")
+    post = client.create_post(user_token, {"body": "今天学了新词 #HSK3", "images": [{"key": key}]})
+    print(post["url"], post["status"])
+
+    # …or with a video, once it is transcoded.
+    video = client.upload_video(user_token, "lesson.mp4", "lesson.mp4", "video/mp4")
+    client.wait_video_ready(user_token, video["asset_id"])
+    client.create_post(user_token, {"title": "第一课", "video": {"asset_id": video["asset_id"]}})
+except OpenApiError as e:
+    if e.reason != "consent_required":
+        raise
+    print(e.consent_url)  # only the person can agree to show their name on posts, at this address
+```
+
+A post has either images (up to 9) or one video. Errors keep the server's `reason`: `consent_required`,
+`video_not_ready`, `post_rate_limited`, `app_user_daily_limit`, `daily_quota_exceeded`,
+`minor_not_allowed`, `app_post_stopped`, …. `create_post` and completing a video upload are retried after
+server errors like a GET (the server makes them idempotent).
+
+### Posting as the institution (机构号)
+
+With the institution's tenant key the same helpers post as its community account (its name and logo, the
+post says it came from your app): `upload_image_as_org`, `upload_video_as_org`, `wait_video_ready_as_org`,
+`create_post_as_org`. The institution must have installed the app and granted `community:post`; before its
+homepage was first published there is no account yet (409 `no_org_account`). Limits and review are the same.
+
+```python
+key = client.upload_image_as_org(tenant_key, data, "image/png")
+client.create_post_as_org(tenant_key, {"body": "秋季班开始报名", "images": [{"key": key}]})
+```
+
+### The institution's dashboard
+
+`get_all_insights` reads every page of the institution's dashboard the API offers (`GET /insights`, scope
+`insights:readonly`, tenant token): the default page first, then each other tab it lists, with the same
+query. It returns tab → page. Fewer than five people come back as null with `withheld: true`; money is
+per currency, never converted.
+
+```python
+pages = client.get_all_insights(tenant_key, {"range": "30d"})
+```
 
 ## The address
 

@@ -1,6 +1,8 @@
 import socket
+import tempfile
 import threading
 import unittest
+import uuid
 
 from ichinese_open import VERSION, Client, OpenApiError
 from tests.mock_server import MockServer, Recorded
@@ -224,6 +226,148 @@ class ClientTest(unittest.TestCase):
         self.srv.routes[("GET", P + "/custom")] = lambda r: (200, {}, {"auth": r.headers["authorization"], "q": r.query})
         r = self.client().request("GET", "/custom", {"a": [1, 2], "b": True, "c": None})
         self.assertEqual(r, {"auth": "Bearer a-1", "q": {"a": ["1", "2"], "b": ["true"]}})
+
+
+ASSET = "8a1f2c3d-4e5f-4a6b-9c7d-0e1f2a3b4c5d"
+
+
+class CommunityTest(unittest.TestCase):
+    """Posting in a person's name (D105)."""
+
+    def setUp(self) -> None:
+        self.srv = MockServer().__enter__()
+
+    def tearDown(self) -> None:
+        self.srv.__exit__(None, None, None)
+
+    def client(self) -> Client:
+        c = Client("cn.cli_x", "secret", base_url=self.srv.base)
+        c.retry_base_seconds = 0.001
+        return c
+
+    def test_upload_image_puts_to_the_slot_and_returns_the_key(self):
+        self.srv.routes[("POST", P + "/community/images")] = lambda r: (201, {}, {
+            "key": "img/k1", "upload_url": self.srv.base + "/upload/img-1?sig=x", "method": "PUT",
+            "headers": {"Content-Type": "image/png", "X-Amz-Meta-A": "1"}, "expires_at": "2026-11-06T10:00:00Z"})
+        self.srv.routes[("PUT", "/upload/img-1")] = lambda r: (200, {}, None)
+        self.assertEqual(self.client().upload_image("cn.u-1", b"\x89PNG", "image/png"), "img/k1")
+        slot = self.srv.of(P + "/community/images")[0]
+        self.assertEqual(slot.body, {"content_type": "image/png", "size_bytes": 4})
+        self.assertEqual(slot.headers["authorization"], "Bearer cn.u-1")
+        put = self.srv.of("/upload/img-1")[0]
+        self.assertEqual((put.method, put.raw, put.query), ("PUT", b"\x89PNG", {"sig": ["x"]}))
+        self.assertEqual((put.headers["content-type"], put.headers["x-amz-meta-a"]), ("image/png", "1"))
+        self.assertNotIn("authorization", put.headers)
+
+    def test_refused_put_is_an_error(self):
+        self.srv.routes[("POST", P + "/community/images")] = lambda r: (201, {}, {
+            "key": "k", "upload_url": self.srv.base + "/upload/x", "method": "PUT", "headers": {}, "expires_at": ""})
+        self.srv.routes[("PUT", "/upload/x")] = lambda r: (403, {}, b"denied")
+        with self.assertRaises(OpenApiError) as ctx:
+            self.client().upload_image("u", b"x", "image/jpeg")
+        self.assertEqual((ctx.exception.status, ctx.exception.code), (403, "UPLOAD_FAILED"))
+
+    def test_upload_video_creates_puts_and_completes(self):
+        self.srv.routes[("POST", P + "/community/videos")] = lambda r: (201, {}, {
+            "asset_id": ASSET, "status": "uploading",
+            "upload": {"url": self.srv.base + "/upload/v-1", "method": "PUT", "headers": {"X-H": "v"}, "expires_at": ""}})
+        self.srv.routes[("PUT", "/upload/v-1")] = lambda r: (200, {}, None)
+        self.srv.routes[("POST", P + f"/community/videos/{ASSET}/complete")] = lambda r: (
+            200, {}, {"asset_id": ASSET, "status": "queued"})
+        with tempfile.NamedTemporaryFile(suffix=".mp4") as f:
+            f.write(b"\x00\x01\x02\x03\x04")
+            f.flush()
+            v = self.client().upload_video("u", f.name, "a.mp4", "video/mp4")
+        self.assertEqual(v, {"asset_id": ASSET, "status": "queued"})
+        self.assertEqual([(r.method, r.path) for r in self.srv.requests], [
+            ("POST", P + "/community/videos"), ("PUT", "/upload/v-1"), ("POST", P + f"/community/videos/{ASSET}/complete")])
+        self.assertEqual(self.srv.requests[0].body, {"filename": "a.mp4", "content_type": "video/mp4", "size_bytes": 5})
+        self.assertEqual((self.srv.requests[1].raw, self.srv.requests[1].headers["x-h"]), (b"\x00\x01\x02\x03\x04", "v"))
+        self.assertEqual(self.srv.requests[2].headers["authorization"], "Bearer u")
+
+    def test_wait_video_ready(self):
+        states = ["queued", "processing", "ready"]
+        self.srv.routes[("GET", P + f"/community/videos/{ASSET}")] = lambda r: (
+            200, {}, {"asset_id": ASSET, "status": states.pop(0), "duration_s": 12})
+        v = self.client().wait_video_ready("u", ASSET, interval=0.001)
+        self.assertEqual((v["status"], v["duration_s"]), ("ready", 12))
+        self.assertEqual(self.srv.count(P + f"/community/videos/{ASSET}"), 3)
+
+    def test_wait_video_failed_and_timeout(self):
+        self.srv.routes[("GET", P + f"/community/videos/{ASSET}")] = lambda r: (
+            200, {}, {"asset_id": ASSET, "status": "failed", "error": "unsupported_codec"})
+        with self.assertRaises(OpenApiError) as ctx:
+            self.client().wait_video_ready("u", ASSET, interval=0.001)
+        self.assertEqual((ctx.exception.reason, ctx.exception.details["error"]), ("video_failed", "unsupported_codec"))
+        self.srv.routes[("GET", P + f"/community/videos/{ASSET}")] = lambda r: (
+            200, {}, {"asset_id": ASSET, "status": "processing"})
+        with self.assertRaises(OpenApiError) as ctx:
+            self.client().wait_video_ready("u", ASSET, timeout=0.03, interval=0.005)
+        self.assertEqual((ctx.exception.code, ctx.exception.reason), ("TIMEOUT", "video_not_ready"))
+
+    def test_create_post_adds_a_uuid_and_reuses_it_on_retries(self):
+        calls = {"n": 0}
+
+        def posts(r: Recorded):
+            calls["n"] += 1
+            return (503, {}, None) if calls["n"] == 1 else (201, {}, {"post_id": "cn:post:1"})
+
+        self.srv.routes[("POST", P + "/community/posts")] = posts
+        self.assertEqual(self.client().create_post("u", {"body": "你好 #学中文"}), {"post_id": "cn:post:1"})
+        sent = [r.body for r in self.srv.of(P + "/community/posts")]
+        self.assertEqual(len(sent), 2)
+        self.assertEqual(str(uuid.UUID(sent[0]["uuid"], version=4)), sent[0]["uuid"])
+        self.assertEqual(sent[1]["uuid"], sent[0]["uuid"])
+        self.assertEqual(sent[0]["body"], "你好 #学中文")
+
+        self.srv.requests.clear()
+        post = {"uuid": "mine-1", "title": "T"}
+        self.client().create_post("u", post)
+        self.assertEqual(self.srv.of(P + "/community/posts")[0].body, {"uuid": "mine-1", "title": "T"})
+        self.assertEqual(post, {"uuid": "mine-1", "title": "T"})
+
+    def test_posting_as_the_institution_uses_its_tenant_token(self):
+        token_routes(self.srv)
+        self.srv.routes[("POST", P + "/community/images")] = lambda r: (201, {}, {
+            "key": "img/org", "upload_url": self.srv.base + "/upload/org-1", "method": "PUT", "headers": {},
+            "expires_at": ""})
+        self.srv.routes[("PUT", "/upload/org-1")] = lambda r: (200, {}, None)
+        self.srv.routes[("POST", P + "/community/posts")] = lambda r: (201, {}, {"post_id": "cn:post:2"})
+        c = self.client()
+        self.assertEqual(c.upload_image_as_org("cn.org-1", b"\x09", "image/png"), "img/org")
+        c.create_post_as_org("cn.org-1", {"body": "招生啦"})
+        self.assertEqual(self.srv.of("/upload/org-1")[0].method, "PUT")
+        self.assertEqual(self.srv.of(P + "/community/images")[0].headers["authorization"], "Bearer t-1")
+        sent = self.srv.of(P + "/community/posts")[0]
+        self.assertEqual(sent.headers["authorization"], "Bearer t-1")
+        self.assertEqual(str(uuid.UUID(sent.body["uuid"], version=4)), sent.body["uuid"])
+        self.assertEqual(sent.body["body"], "招生啦")
+        self.assertEqual(self.srv.of(P + "/auth/tenant_access_token")[0].body["tenant_key"], "cn.org-1")
+
+    def test_get_all_insights_reads_every_tab_with_the_same_query(self):
+        token_routes(self.srv)
+
+        def page(r):
+            tab = (r.query.get("tab") or ["enrollment"])[0]
+            return (200, {}, {"tab": tab, "tabs": ["enrollment", "teaching", "income"], "range": r.query["range"][0]})
+
+        self.srv.routes[("GET", P + "/insights")] = page
+        pages = self.client().get_all_insights("cn.org-1", {"range": "7d", "tab": "ignored"})
+        self.assertEqual(list(pages), ["enrollment", "teaching", "income"])
+        self.assertEqual(pages["income"]["range"], "7d")
+        seen = self.srv.of(P + "/insights")
+        self.assertEqual([r.query.get("tab") for r in seen], [None, ["teaching"], ["income"]])
+        self.assertEqual(seen[0].headers["authorization"], "Bearer t-1")
+
+    def test_consent_required(self):
+        self.srv.routes[("POST", P + "/community/posts")] = lambda r: (409, {}, {"error": {
+            "code": "CONFLICT", "message": "consent",
+            "details": {"reason": "consent_required", "consent_url": "https://www.ichinese.cn/consent/x"}}})
+        with self.assertRaises(OpenApiError) as ctx:
+            self.client().create_post("u", {"body": "x"})
+        e = ctx.exception
+        self.assertEqual((e.status, e.reason, e.consent_url), (409, "consent_required", "https://www.ichinese.cn/consent/x"))
+        self.assertEqual(self.srv.count(P + "/community/posts"), 1)
 
 
 class NetworkTest(unittest.TestCase):
