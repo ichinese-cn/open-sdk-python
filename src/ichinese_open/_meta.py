@@ -3,7 +3,7 @@
 from typing import Dict, List, Tuple
 
 #: The SDK's version (it follows the open API's).
-VERSION = "1.0.0-rc.3"
+VERSION = "1.0.0-rc.4"
 __version__ = VERSION
 #: The open API's address from the release configuration (sdks/release.json); ``base_url`` overrides it.
 DEFAULT_BASE_URL = "https://open.ichinese.cn"
