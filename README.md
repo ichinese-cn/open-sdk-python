@@ -1,6 +1,6 @@
 # ichinese-open-sdk (Python)
 
-> **Prerelease 1.0.0-rc.4.** 这是预发布版，开放平台还没有正式开放，SDK 的默认地址可能连不上。This is a prerelease: the open platform is not open to the public yet, so the SDK's default address may not answer.
+> **Prerelease 1.0.0-rc.5.** 这是预发布版，开放平台还没有正式开放，SDK 的默认地址可能连不上。This is a prerelease: the open platform is not open to the public yet, so the SDK's default address may not answer.
 
 开放平台的 Python 服务端 SDK：开放接口（`/open-apis/v1`）的每个接口都是一个方法（由契约生成），另外帮你取应用令牌和机构令牌并在过期前续期、限流和服务端错误时退避重试、翻页、给出带类型的错误、在后端换网页免登码，以及事件推送的验签和解密。只用标准库，没有必需依赖。
 
@@ -224,6 +224,18 @@ uv build   # dist/*.whl and dist/*.tar.gz
 
 `_operations.py` and `_meta.py` are generated from `docs/api/open-api.yaml` (`pnpm sdk:gen`); do not edit
 them. The integration test runs when `ICH_OPEN_IT` holds the fixture JSON (or its file path).
+
+## Phone number and email scopes
+
+Declare `phone` and/or `email` in the developer console and release the app configuration.
+Each user decides on each scope separately. The backend's `getUserInfo` (Python: `get_user_info`,
+Go: `GetUserInfo`) returns `phone_number` (E.164) and/or `email` only for scopes both declared
+and granted, and only for currently verified, bound identifiers. Otherwise the field is absent,
+including after revocation. Neither scope requires `profile`.
+
+For the web JS SDK's browser fallback, include the declared scopes in `config({ appId, scopes: ['phone', 'email'] })`.
+In a container the consent sheet uses the app's declared scopes. Exchange the code and call the user-info
+API on your backend; keep the user token there.
 
 ## License
 

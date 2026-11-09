@@ -3,7 +3,7 @@
 from typing import Dict, List, Tuple
 
 #: The SDK's version (it follows the open API's).
-VERSION = "1.0.0-rc.4"
+VERSION = "1.0.0-rc.5"
 __version__ = VERSION
 #: The open API's address from the release configuration (sdks/release.json); ``base_url`` overrides it.
 DEFAULT_BASE_URL = "https://open.ichinese.cn"
@@ -13,6 +13,8 @@ API_PREFIX = "/open-apis/v1"
 SCOPES: List[str] = [
     "openid",
     "profile",
+    "phone",
+    "email",
     "org:member:readonly",
     "org:member",
     "class:readonly",
@@ -203,6 +205,8 @@ OPERATION_TOKENS: Dict[str, Tuple[str, ...]] = {
 
 SCOPE_OPENID = "openid"
 SCOPE_PROFILE = "profile"
+SCOPE_PHONE = "phone"
+SCOPE_EMAIL = "email"
 SCOPE_ORG_MEMBER_READONLY = "org:member:readonly"
 SCOPE_ORG_MEMBER = "org:member"
 SCOPE_CLASS_READONLY = "class:readonly"
