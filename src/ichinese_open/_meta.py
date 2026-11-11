@@ -3,7 +3,7 @@
 from typing import Dict, List, Tuple
 
 #: The SDK's version (it follows the open API's).
-VERSION = "1.0.0-rc.5"
+VERSION = "1.0.0-rc.6"
 __version__ = VERSION
 #: The open API's address from the release configuration (sdks/release.json); ``base_url`` overrides it.
 DEFAULT_BASE_URL = "https://open.ichinese.cn"
@@ -90,6 +90,9 @@ ERROR_REASONS: List[str] = [
     "not_installed",
     "not_available",
     "scope_denied",
+    "gray_api_denied",
+    "frame_assignment_overlap",
+    "idempotency_conflict",
     "scope_pending",
     "scope_not_declared",
     "gold_only",
@@ -201,6 +204,9 @@ OPERATION_TOKENS: Dict[str, Tuple[str, ...]] = {
     "add_my_word": ("user",),
     "list_class_exams": ("tenant",),
     "list_class_exam_results": ("tenant",),
+    "list_gray_avatar_frames": ("app",),
+    "assign_gray_avatar_frame": ("app",),
+    "get_gray_community_post_counts": ("app",),
 }
 
 SCOPE_OPENID = "openid"

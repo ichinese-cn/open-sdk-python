@@ -646,3 +646,28 @@ class Operations:
     def iter_list_class_exam_results(self, class_id: str, exam_id: str, query: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Iterator[Dict[str, Any]]:
         """Every item of ``list_class_exam_results``, page after page (``page_size`` defaults to 100)."""
         return self._iterate("listClassExamResults", "GET", "/classes/{class_id}/exams/{exam_id}/results", {"class_id": class_id, "exam_id": exam_id}, query, ("tenant",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def list_gray_avatar_frames(self, query: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """List assignable avatar frames
+
+        ``GET /gray/avatar-frames; app token``
+        """
+        return self._call("listGrayAvatarFrames", "GET", "/gray/avatar-frames", {}, query, None, ("app",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def iter_list_gray_avatar_frames(self, query: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Iterator[Dict[str, Any]]:
+        """Every item of ``list_gray_avatar_frames``, page after page (``page_size`` defaults to 100)."""
+        return self._iterate("listGrayAvatarFrames", "GET", "/gray/avatar-frames", {}, query, ("app",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def assign_gray_avatar_frame(self, body: Dict[str, Any], *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """Temporarily set an avatar frame for any platform user
+
+        ``POST /gray/avatar-frame-assignments; app token``
+        """
+        return self._call("assignGrayAvatarFrame", "POST", "/gray/avatar-frame-assignments", {}, None, body, ("app",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+
+    def get_gray_community_post_counts(self, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """Count posts across all regions
+
+        ``GET /gray/community/post-counts; app token``
+        """
+        return self._call("getGrayCommunityPostCounts", "GET", "/gray/community/post-counts", {}, None, None, ("app",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
