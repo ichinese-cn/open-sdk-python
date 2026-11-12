@@ -1,6 +1,6 @@
 # ichinese-open-sdk (Python)
 
-> **Prerelease 1.0.0-rc.6.** 这是预发布版，开放平台还没有正式开放，SDK 的默认地址可能连不上。This is a prerelease: the open platform is not open to the public yet, so the SDK's default address may not answer.
+> **Prerelease 1.0.0-rc.7.** 这是预发布版，开放平台还没有正式开放，SDK 的默认地址可能连不上。This is a prerelease: the open platform is not open to the public yet, so the SDK's default address may not answer.
 
 开放平台的 Python 服务端 SDK：开放接口（`/open-apis/v1`）的每个接口都是一个方法（由契约生成），另外帮你取应用令牌和机构令牌并在过期前续期、限流和服务端错误时退避重试、翻页、给出带类型的错误、在后端换网页免登码，以及事件推送的验签和解密。只用标准库，没有必需依赖。
 

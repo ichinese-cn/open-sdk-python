@@ -665,9 +665,9 @@ class Operations:
         """
         return self._call("assignGrayAvatarFrame", "POST", "/gray/avatar-frame-assignments", {}, None, body, ("app",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
 
-    def get_gray_community_post_counts(self, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
-        """Count posts across all regions
+    def get_gray_community_post_counts(self, query: Optional[Dict[str, Any]] = None, *, tenant_key: Optional[str] = None, user_access_token: Optional[str] = None, access_token: Optional[str] = None, headers: Optional[Mapping[str, str]] = None) -> Any:
+        """Count posts by topic across all five regions
 
         ``GET /gray/community/post-counts; app token``
         """
-        return self._call("getGrayCommunityPostCounts", "GET", "/gray/community/post-counts", {}, None, None, ("app",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
+        return self._call("getGrayCommunityPostCounts", "GET", "/gray/community/post-counts", {}, query, None, ("app",), tenant_key=tenant_key, user_access_token=user_access_token, access_token=access_token, headers=headers)
